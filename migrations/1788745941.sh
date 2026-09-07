@@ -1,4 +1,4 @@
-echo "Move Kitty defaults into the system config and restrict remote control to its local socket"
+echo "Update Kitty configuration"
 
 kitty_config="$HOME/.config/kitty/kitty.conf"
 # config/kitty/kitty.conf as shipped after 008f3a22 (Kitty cwd lookup).
@@ -17,12 +17,17 @@ if [[ -f $kitty_config ]]; then
     backup=$(mktemp "$kitty_config.bak.XXXXXX")
     cp -p "$kitty_config" "$backup"
     sed --follow-symlinks -i -E "s/$unrestricted/# &/" "$kitty_config"
-    echo "Commented out unrestricted Kitty remote control. Saved backup as $backup."
+    printf '\n%s\n' \
+      "Unrestricted remote control disabled." \
+      "Your other Kitty settings were preserved."
+    printf '\nBackup saved to:\n  %s\n' "$backup"
     changed=true
   fi
 
   if [[ $changed == "true" ]]; then
     # Kitty reads allow_remote_control at startup; config reload is insufficient.
-    echo "Close and reopen all Kitty windows to apply the remote-control restriction."
+    gum style --border rounded --border-foreground 3 --padding "1 2" --margin "1 0" \
+      "Restart Kitty" "" \
+      "Close and reopen all Kitty windows to apply this change."
   fi
 fi

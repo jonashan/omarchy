@@ -33,6 +33,17 @@ mkdir -p "$HOME/.local/bin"
 printf -v package_arg '%q' "$package"
 printf -v bin_arg '%q' "$bin"
 
+# Keep values that are inert inside double quotes in the form existing migrations
+# recognize, including mise backend options that %q would unnecessarily escape.
+case "$package" in
+  *'$'* | *'`'* | *'"'* | *'\'* | *'!'* | *[[:cntrl:]]*) ;;
+  *) package_arg="\"$package\"" ;;
+esac
+case "$bin" in
+  *'$'* | *'`'* | *'"'* | *'\'* | *'!'* | *[[:cntrl:]]*) ;;
+  *) bin_arg="\"$bin\"" ;;
+esac
+
 # These tools install and upgrade on first run, so mise's release cooldown would
 # hold a new version back for days after it ships. Exported rather than set on
 # the install line alone, so resolving the version to execute agrees with the

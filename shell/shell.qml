@@ -683,12 +683,18 @@ ShellRoot {
         === shell.pluginRegistry.resolveEnabledId(target)
     }
 
+    function currentManifest() {
+      var id = shell.pluginRegistry.resolveEnabledId(target)
+      return shell.pluginRegistry.installedPlugins[id] || null
+    }
+
     var api = pluginShellApiComponent.createObject(null, {
       pluginId: target,
       barConfig: shell.publicBarConfig(),
       _summon: function(requestedId, payloadJson) {
-        return owns(requestedId)
-          ? shell.summon(shell.pluginRegistry.resolveEnabledId(target), payloadJson) : false
+        if (!owns(requestedId)
+            && !shell.pluginCloneMaySummon(currentManifest(), requestedId)) return false
+        return shell.summon(shell.pluginRegistry.resolveEnabledId(requestedId), payloadJson)
       },
       _hide: function(requestedId) {
         return owns(requestedId)

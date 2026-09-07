@@ -253,6 +253,17 @@ Item {
       return JSON.stringify({ reachable: !!service, enabled: service ? service.enabled === true : false })
     }
 
+    function probeMediaWidgetSummon(): string {
+      var entryFacade = root.shell
+        && typeof root.shell.pluginShellForBarEntry === "function"
+        ? root.shell.pluginShellForBarEntry("probe-media", "acme.media-clone") : null
+      return JSON.stringify({
+        entryFacade: !!entryFacade,
+        osdSummoned: entryFacade ? entryFacade.summon("omarchy.osd", "{}") : false,
+        foreignSummoned: entryFacade ? entryFacade.summon("omarchy.lock", "{}") : false
+      })
+    }
+
     function mutateSnapshot(): string {
       if (root.barConfig && root.barConfig.layout
           && root.barConfig.layout.left && root.barConfig.layout.left.length > 0)
@@ -670,6 +681,13 @@ media_proxy_probe=$(shell_ipc acme-review-bar probeMediaProxy)
 jq -e '.reachable == true and .enabled == true' <<<"$media_proxy_probe" >/dev/null || {
   printf 'Replacement-bar media proxy probe: %s\n' "$media_proxy_probe" >&2
   fail_with_log "replacement-bar service proxies resolve enabled clones"
+}
+
+media_summon_probe=$(shell_ipc acme-review-bar probeMediaWidgetSummon)
+jq -e '.entryFacade == true and .osdSummoned == true and .foreignSummoned == false' \
+  <<<"$media_summon_probe" >/dev/null || {
+  printf 'Replacement-bar media summon probe: %s\n' "$media_summon_probe" >&2
+  fail_with_log "replacement-bar clone facades retain only their auxiliary UI integration"
 }
 
 bar_config_before=$(shell_ipc shell listShellConfig | jq -c '.bar')

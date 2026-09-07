@@ -130,6 +130,13 @@ qml_matches "$shell_qml" 'shellApi\.idleConfig *= *shell\.publicIdleConfigFor\( 
   fail "cloned idle service configuration does not refresh"
 qml_matches "$idle_service" 'shell *&& *shell\.idleConfig *\? *shell\.idleConfig *: *\(\{\}\)' ||
   fail "the idle service does not consume its scoped configuration"
+bar_entry_shell=$(sed -n '/^  function pluginShellForBarEntry(/,/^  function pluginShellFor(/p' "$shell_qml")
+tr '\n\r\t' '   ' <<<"$bar_entry_shell" |
+  grep -Eq 'var id *= *shell\.pluginRegistry\.resolveEnabledId\( *target *\)[^}]*return shell\.pluginRegistry\.installedPlugins\[id\] *\|\| *null' ||
+  fail "replacement-bar clone authorization does not follow the enabled implementation"
+tr '\n\r\t' '   ' <<<"$bar_entry_shell" |
+  grep -Eq 'shell\.pluginCloneMaySummon\( *currentManifest\( *\), *requestedId *\)' ||
+  fail "built-in clones in replacement bars cannot summon their existing auxiliary UI"
 qml_matches "$shell_qml" 'shell\.pluginCloneMaySummon\( *currentManifest\( *\), *requestedId *\)' ||
   fail "built-in clones cannot summon their existing auxiliary UI"
 qml_matches "$shell_qml" '"omarchy\.media": *\["omarchy\.osd"\]' ||

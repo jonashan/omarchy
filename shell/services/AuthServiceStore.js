@@ -4,6 +4,7 @@
 // a separate empty store rather than a shared path to credential-bearing QML.
 
 var services = ({})
+var trustedIds = ({})
 
 function has(id) {
   return services[String(id || "")] !== undefined
@@ -12,9 +13,14 @@ function has(id) {
 function put(id, service) {
   var key = String(id || "")
   if (!key || !service) return
+  trustedIds[key] = true
   if (services[key] && services[key] !== service && typeof services[key].destroy === "function")
     services[key].destroy()
   services[key] = service
+}
+
+function isTrusted(id) {
+  return trustedIds[String(id || "")] === true
 }
 
 function ids() {

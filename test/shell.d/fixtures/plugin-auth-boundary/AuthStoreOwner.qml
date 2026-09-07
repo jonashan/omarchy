@@ -10,6 +10,10 @@ QtObject {
     return AuthServiceStore.has(id)
   }
 
+  function isTrusted(id) {
+    return AuthServiceStore.isTrusted(id)
+  }
+
   function updateManifest(id, manifest) {
     AuthServiceStore.updateManifest(id, manifest)
   }

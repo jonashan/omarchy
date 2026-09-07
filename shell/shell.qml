@@ -375,7 +375,7 @@ ShellRoot {
     if (!shell.pluginHasBarCapabilities(manifest)) return false
     var id = shell.pluginRegistry.resolveEnabledId(String(requestedId || ""))
     var target = shell.pluginRegistry.installedPlugins[id]
-    if (!target || shell.isAuthenticationService(target)) return false
+    if (!target || shell.isAuthenticationService(target, id)) return false
     if (shell.barEntryConfigured(id)) return true
     var uiKinds = ["bar-widget", "panel", "overlay", "menu"]
     for (var i = 0; i < uiKinds.length; i++)
@@ -842,9 +842,11 @@ ShellRoot {
     return serviceFor(shell.pluginRegistry.resolveEnabledId(pluginId))
   }
 
-  function isAuthenticationService(manifest) {
-    return !!manifest && Array.isArray(manifest.__hostCapabilities)
-      && manifest.__hostCapabilities.indexOf("authentication") !== -1
+  function isAuthenticationService(manifest, pluginId) {
+    var key = String(pluginId || (manifest && manifest.id) || "")
+    return AuthServiceStore.isTrusted(key)
+      || (!!manifest && Array.isArray(manifest.__hostCapabilities)
+        && manifest.__hostCapabilities.indexOf("authentication") !== -1)
   }
 
   function ensureService(pluginId) {
@@ -857,7 +859,7 @@ ShellRoot {
     if (!manifest.entryPoints || !manifest.entryPoints.service) return null
     var url = pluginRegistry.entryPointUrl(manifest, "service")
     if (!url) return null
-    var authenticationService = shell.isAuthenticationService(manifest)
+    var authenticationService = shell.isAuthenticationService(manifest, key)
     if (authenticationService && AuthServiceStore.has(key)) return null
 
     var comp = Qt.createComponent(url, Component.PreferSynchronous)
@@ -908,7 +910,7 @@ ShellRoot {
       if (!Array.isArray(m.kinds) || m.kinds.indexOf("service") === -1) continue
       if (!m.entryPoints || !m.entryPoints.service) continue
       if (!pluginRegistry.isEnabled(id)) continue
-      var authenticationService = shell.isAuthenticationService(m)
+      var authenticationService = shell.isAuthenticationService(m, id)
       if (_services[id]) {
         if (authenticationService) {
           // A service that gains a trusted authentication capability must move
@@ -965,7 +967,7 @@ ShellRoot {
         && authenticationManifest.entryPoints
         && authenticationManifest.entryPoints.service
       if (stillAuthenticationService && pluginRegistry.isEnabled(authenticationId)
-          && shell.isAuthenticationService(authenticationManifest)) continue
+          && shell.isAuthenticationService(authenticationManifest, authenticationId)) continue
       AuthServiceStore.destroy(authenticationId)
     }
   }

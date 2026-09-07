@@ -75,6 +75,7 @@ ShellRoot {
       ownSettings: api.updateEntryInline(caller, {}) === true,
       foreignSettings: api.updateEntryInline("omarchy.lock", {}) === false,
       authStoreOwnerRetains: authStoreOwner.has("omarchy.lock") === true,
+      authStoreOwnerRemembersTrust: authStoreOwner.isTrusted("omarchy.lock") === true,
       authStoreOwnerUpdatesManifest: root.ownService.manifest
         && root.ownService.manifest.version === "kept",
       authStoreImportIsolated: authStoreReader.has("omarchy.lock") === false,

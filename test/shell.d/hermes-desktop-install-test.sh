@@ -38,6 +38,11 @@ release_commit=$(git -C "$test_tmp/seed" rev-parse HEAD)
 printf 'after\n' >"$test_tmp/seed/runtime.txt"
 git -C "$test_tmp/seed" diff >"$test_tmp/share/runtime.patch"
 printf 'before\n' >"$test_tmp/seed/runtime.txt"
+printf 'newer desktop source\n' >"$test_tmp/seed/apps/desktop/src/main.js"
+git -C "$test_tmp/seed" add apps/desktop/src/main.js
+git -C "$test_tmp/seed" -c user.name=Test -c user.email=test@example.invalid commit -qm newer-main
+origin_commit=$(git -C "$test_tmp/seed" rev-parse HEAD)
+export OMARCHY_TEST_RELEASE_COMMIT="$release_commit"
 printf '{"branch":"main","commit":"%s"}\n' "$release_commit" >"$test_tmp/package/resources/install-stamp.json"
 printf 'packaged app\n' >"$test_tmp/package/resources/app.asar"
 printf '#!/bin/bash\nexit 0\n' >"$test_tmp/package/Hermes"
@@ -51,27 +56,51 @@ set -e
 printf 'bootstrap\n' >>"$OMARCHY_TEST_ROOT/events"
 printf '%s\n' "$@" >"$OMARCHY_TEST_ROOT/install-args"
 [[ ${OMARCHY_TEST_INSTALL_FAIL:-0} != 1 ]] || exit 7
+commit=$OMARCHY_TEST_RELEASE_COMMIT
+force=false
 while (( $# )); do
   case "$1" in
     --dir) runtime=$2; shift ;;
+    --commit) commit=$2; shift ;;
+    --force-commit) force=true ;;
     --hermes-home) [[ $2 == "$HERMES_HOME" ]] ;;
   esac
   shift
 done
 mkdir -p -- "${runtime%/*}"
-if [[ ! -d $runtime ]]; then git clone -q "$OMARCHY_TEST_ROOT/seed" "$runtime"; fi
+if [[ ! -d $runtime ]]; then
+  git clone -q --depth 1 "file://$OMARCHY_TEST_ROOT/seed" "$runtime"
+else
+  git -C "$runtime" checkout -q main
+  git -C "$runtime" pull -q --ff-only origin main
+fi
+git -C "$runtime" fetch -q origin "$commit"
+if [[ $force == true ]] || ! git -C "$runtime" merge-base --is-ancestor "$commit" HEAD; then
+  git -C "$runtime" checkout -q --detach "$commit"
+fi
 mkdir -p "$runtime/venv/bin"
+git -C "$runtime" rev-parse HEAD >"$runtime/venv/dependency-commit"
 printf '#!/bin/bash\nexit 0\n' >"$runtime/venv/bin/hermes"
 chmod +x "$runtime/venv/bin/hermes"
 printf '#!/bin/bash\nexec /usr/bin/python3 "$@"\n' >"$runtime/venv/bin/python"
 chmod +x "$runtime/venv/bin/python"
 [[ ${OMARCHY_TEST_NO_MARKER:-0} == 1 ]] || touch "$runtime/.hermes-bootstrap-complete"
+mkdir -p "$HOME/.local/bin"
+for command in hermes hermes-agent hermes-acp; do
+  rm -f "$HOME/.local/bin/$command"
+  printf 'native runtime shim\n' >"$HOME/.local/bin/$command"
+done
 MOCK
 
 cat >"$test_tmp/bin/omarchy-pkg-add" <<'MOCK'
 #!/bin/bash
 printf 'package %s\n' "$*" >>"$OMARCHY_TEST_ROOT/events"
 [[ ${OMARCHY_TEST_PACKAGE_FAIL:-0} != 1 ]]
+MOCK
+cat >"$test_tmp/bin/git" <<'MOCK'
+#!/bin/bash
+if [[ ${OMARCHY_TEST_FETCH_FAIL:-0} == 1 && " $* " == *" --unshallow "* ]]; then exit 8; fi
+exec /usr/bin/git "$@"
 MOCK
 cat >"$test_tmp/bin/omarchy-install-hermes-cli" <<'MOCK'
 #!/bin/bash
@@ -94,7 +123,6 @@ cat >"$test_tmp/bin/mv" <<'MOCK'
 #!/bin/bash
 if [[ ${OMARCHY_TEST_COPY_RACE:-0} == 1 && $1 == -T ]]; then
   mkdir -p "${@: -1}"
-  printf 'concurrent app\n' >"${@: -1}/keep"
 fi
 exec /usr/bin/mv "$@"
 MOCK
@@ -106,6 +134,7 @@ exec "$@"
 MOCK
 cat >"$test_tmp/bin/hermes-desktop" <<'MOCK'
 #!/bin/bash
+sleep 0.05
 native="$HERMES_HOME/hermes-agent/apps/desktop/release/linux-unpacked"
 if [[ -x $native/Hermes && -f $native/resources/app.asar ]]; then
   printf 'launch\n' >>"$OMARCHY_TEST_ROOT/events"
@@ -162,7 +191,7 @@ assert_stopped() {
 
 new_home fresh
 run_installer || fail "fresh setup succeeds" "$(cat "$test_tmp/output")"
-expected=$(printf '%s\n' --skip-setup --branch main --commit "$release_commit" --dir "$runtime" --hermes-home "$hermes_home")
+expected=$(printf '%s\n' --skip-setup --branch main --commit "$release_commit" --force-commit --dir "$runtime" --hermes-home "$hermes_home")
 [[ $(cat "$test_tmp/install-args") == "$expected" ]] || fail "upstream installer receives the pinned main arguments"
 [[ $(head -3 "$test_tmp/events") == $'package hermes-desktop\nhandoff\nbootstrap' ]] || fail "package and CLI handoff precede runtime bootstrap"
 grep -qx launch "$test_tmp/events" || fail "native app is copied before launch"
@@ -171,6 +200,17 @@ grep -qx launch "$test_tmp/events" || fail "native app is copied before launch"
 [[ $(cat "$runtime/runtime.txt") == after ]] || fail "the release runtime receives its patch"
 [[ $(stat -c %a "$native/chrome-sandbox") == 755 ]] || fail "the user sandbox is not setuid"
 [[ $(stat -c %a "$test_tmp/package/chrome-sandbox") == 4755 ]] || fail "package sandbox permissions remain unchanged"
+[[ $(git -C "$runtime" symbolic-ref --short HEAD) == main && $(git -C "$runtime" rev-parse main) == "$release_commit" ]] || fail "main starts at the release rather than the clone tip"
+[[ $(cat "$runtime/venv/dependency-commit") == "$release_commit" ]] || fail "dependencies are installed for the release"
+[[ $(git -C "$runtime" rev-parse --is-shallow-repository) == false ]] || fail "first update has connected history"
+# Reproduce the updater's checkout/count/pull sequence while origin stays put.
+git clone -q "$runtime" "$test_tmp/first-update"
+git -C "$test_tmp/first-update" remote set-url origin "file://$test_tmp/seed"
+git -C "$test_tmp/first-update" fetch -q origin main
+git -C "$test_tmp/first-update" checkout -q main
+[[ $(git -C "$test_tmp/first-update" rev-list HEAD..origin/main --count) == 1 ]] || fail "first update detects work even when origin has not moved since install"
+git -C "$test_tmp/first-update" pull -q --ff-only origin main
+[[ $(git -C "$test_tmp/first-update" rev-parse HEAD) == "$origin_commit" ]] || fail "first update fast-forwards to origin"
 pass "fresh setup pins main, patches the matching runtime and copies the complete app before launch"
 
 printf 'user app\n' >"$native/resources/app.asar"
@@ -187,6 +227,7 @@ pass "repeat setup accepts the applied patch and preserves the existing native a
 printf 'new main\n' >"$runtime/runtime.txt"
 git -C "$runtime" add runtime.txt
 git -C "$runtime" -c user.name=Test -c user.email=test@example.invalid commit -qm update
+: >"$test_tmp/events"
 run_installer || fail "a complete updated runtime and native app are reused"
 [[ $(cat "$runtime/runtime.txt") == 'new main' ]] || fail "updated runtime is not release-patched"
 mv "$native" "$test_tmp/saved-native"
@@ -198,7 +239,7 @@ assert_stopped "a missing updated app prevents launch and theme setup"
 pass "updated runtimes are preserved and never seeded with the old packaged app"
 
 new_home dirty-desktop
-HERMES_HOME="$hermes_home" bash "$test_tmp/share/install.sh" --dir "$runtime" --hermes-home "$hermes_home"
+HOME="$test_home" HERMES_HOME="$hermes_home" bash "$test_tmp/share/install.sh" --dir "$runtime" --hermes-home "$hermes_home"
 printf 'local desktop edit\n' >"$runtime/apps/desktop/src/main.js"
 : >"$test_tmp/events"
 run_installer && fail "modified desktop sources cannot be certified as the packaged build"
@@ -227,7 +268,7 @@ for failure in copy race; do
     [[ ! -e $native ]] || fail "partial copy is never published"
   else
     OMARCHY_TEST_COPY_RACE=1 run_installer && fail "concurrent native app stops publication"
-    [[ $(cat "$native/keep") == 'concurrent app' ]] || fail "concurrent native app is preserved"
+    [[ -d $native && -z $(ls -A "$native") ]] || fail "concurrent empty app directory is preserved"
   fi
   [[ -z $(find "${native%/*}" -maxdepth 1 -name '.linux-unpacked.*' -print) ]] || fail "owned staging directory is cleaned up"
   assert_stopped "publication failure prevents launch"
@@ -255,6 +296,59 @@ rm "$runtime/.hermes-bootstrap-complete"
 run_installer && fail "incomplete modified runtime cannot be reset by upstream installer"
 ! grep -qx bootstrap "$test_tmp/events" || fail "modified runtime never reaches upstream installer"
 pass "patch conflicts and incomplete modified runtimes retain local changes and stop safely"
+
+new_home full-history-retry
+git clone -q "$test_tmp/seed" "$runtime"
+git -C "$runtime" checkout -q --detach "$release_commit"
+run_installer || fail "clean incomplete full-history release checkout is repaired" "$(cat "$test_tmp/output")"
+[[ $(cat "$runtime/venv/dependency-commit") == "$release_commit" ]] || fail "full-history retry pins before installing dependencies"
+[[ $(git -C "$runtime" rev-parse HEAD) == "$release_commit" && -f $native/resources/app.asar ]] || fail "full-history retry seeds the matching release"
+pass "full-history retries force the guarded release pin before dependency setup"
+
+new_home local-main
+git clone -q "$test_tmp/seed" "$runtime"
+printf 'local branch work\n' >"$runtime/keep"
+git -C "$runtime" add keep
+git -C "$runtime" -c user.name=Test -c user.email=test@example.invalid commit -qm local-work
+local_main=$(git -C "$runtime" rev-parse main)
+git -C "$runtime" checkout -q --detach "$release_commit"
+run_installer && fail "local main commits cannot be reset by upstream installation"
+! grep -qx bootstrap "$test_tmp/events" || fail "local main is checked before upstream installer"
+[[ $(git -C "$runtime" rev-parse main) == "$local_main" ]] || fail "local main commit stays referenced"
+pass "detached release checkouts do not hide local main work from the installer guard"
+
+new_home deepen-retry
+OMARCHY_TEST_FETCH_FAIL=1 run_installer && fail "history fetch failure stops setup"
+[[ ! -e $native ]] || fail "failed history fetch does not seed the app"
+assert_stopped "failed history fetch prevents launch"
+: >"$test_tmp/events"
+run_installer || fail "history fetch can be retried after runtime setup" "$(cat "$test_tmp/output")"
+! grep -qx bootstrap "$test_tmp/events" || fail "history retry does not repeat upstream installation"
+pass "a history fetch failure can be retried without reinstalling the ready runtime"
+
+new_home existing-commands
+mkdir -p "$test_home/.local/bin"
+printf 'foreign wrapper\n' >"$test_home/.local/bin/hermes"
+printf 'symlink target\n' >"$test_home/target"
+ln -s "$test_home/target" "$test_home/.local/bin/hermes-agent"
+ln -s "$test_home/missing" "$test_home/.local/bin/hermes-acp"
+run_installer || fail "existing commands are preserved before upstream replaces them" "$(cat "$test_tmp/output")"
+backups=("$test_home/.local/bin/".hermes-before-desktop.*)
+[[ ${#backups[@]} == 1 && -d ${backups[0]} ]] || fail "one backup directory preserves existing command names"
+[[ $(cat "${backups[0]}/hermes") == 'foreign wrapper' ]] || fail "foreign wrapper bytes are saved"
+[[ $(readlink "${backups[0]}/hermes-agent") == "$test_home/target" && $(readlink "${backups[0]}/hermes-acp") == "$test_home/missing" ]] || fail "working and broken symlinks are saved as links"
+[[ $(cat "$test_home/target") == 'symlink target' ]] || fail "upstream does not overwrite the original symlink target"
+grep -qF "${backups[0]}" "$test_tmp/output" || fail "backup location is reported"
+pass "pre-existing command files and symlinks are backed up before replacement"
+
+new_home old-package
+mv "$test_tmp/package/resources/install-stamp.json" "$test_tmp/saved-install-stamp.json"
+run_installer && fail "an old installed package cannot bootstrap"
+grep -q 'omarchy update' "$test_tmp/output" || fail "old package has actionable upgrade guidance"
+! grep -qx handoff "$test_tmp/events" || fail "old package is rejected before CLI handoff"
+! grep -qx bootstrap "$test_tmp/events" || fail "old package never reaches upstream installer"
+mv "$test_tmp/saved-install-stamp.json" "$test_tmp/package/resources/install-stamp.json"
+pass "old package fails with upgrade guidance before changing the runtime or CLI"
 
 new_home custom-profile
 hermes_home="$test_home/custom home"

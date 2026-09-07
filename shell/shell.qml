@@ -355,6 +355,27 @@ ShellRoot {
     return shell.manifestHasKind(manifest, "bar")
   }
 
+  function publicIdleConfigFor(manifest) {
+    var metadata = manifest && Util.isPlainObject(manifest.omarchy) ? manifest.omarchy : null
+    if (!metadata || String(metadata.clonedFrom || "") !== "omarchy.idle") return ({})
+    var idle = shell.shellConfig && Util.isPlainObject(shell.shellConfig.idle)
+      ? shell.shellConfig.idle : ({})
+    return JSON.parse(JSON.stringify(idle))
+  }
+
+  function pluginCloneMaySummon(manifest, requestedId) {
+    var metadata = manifest && Util.isPlainObject(manifest.omarchy) ? manifest.omarchy : null
+    var sourceId = metadata ? String(metadata.clonedFrom || "") : ""
+    var allowed = {
+      "omarchy.audio": ["omarchy.osd"],
+      "omarchy.media": ["omarchy.osd"],
+      "omarchy.monitor": ["omarchy.osd"],
+      "omarchy.network": ["omarchy.speedtest", "omarchy.wifiqr"]
+    }
+    var targets = allowed[sourceId] || []
+    return targets.indexOf(String(requestedId || "")) !== -1
+  }
+
   function pluginOwnsTarget(pluginId, requestedId) {
     var caller = String(pluginId || "")
     if (!caller) return false
@@ -575,6 +596,7 @@ ShellRoot {
         ? shell.pluginAppLibraryFor(cacheKey, key) : null,
       bar: shell.pluginBarStateFor(cacheKey, key),
       barConfig: shell.publicBarConfig(),
+      idleConfig: shell.publicIdleConfigFor(manifest),
       _serviceLookup: function(requestedId) {
         return allowOwnService ? shell.pluginServiceFor(key, requestedId) : null
       },
@@ -589,7 +611,8 @@ ShellRoot {
       },
       _summon: function(requestedId, payloadJson) {
         if (!shell.pluginOwnsTarget(key, requestedId)
-            && !shell.barPluginMayControl(currentManifest(), requestedId)) return false
+            && !shell.barPluginMayControl(currentManifest(), requestedId)
+            && !shell.pluginCloneMaySummon(currentManifest(), requestedId)) return false
         return shell.summon(shell.pluginRegistry.resolveEnabledId(requestedId), payloadJson)
       },
       _hide: function(requestedId) {
@@ -828,8 +851,13 @@ ShellRoot {
       widgetApi.widgets = shell.publicBarWidgetSnapshot()
       widgetApi.revision = shell.barWidgetRegistry.revision
     }
-    for (var shellKey in _pluginShellApis)
-      _pluginShellApis[shellKey].barConfig = shell.publicBarConfig()
+    for (var shellKey in _pluginShellApis) {
+      var shellApi = _pluginShellApis[shellKey]
+      var descriptor = _pluginShellApiDescriptors[shellKey]
+      var shellManifest = descriptor ? plugins[descriptor.pluginId] : null
+      shellApi.barConfig = shell.publicBarConfig()
+      shellApi.idleConfig = shell.publicIdleConfigFor(shellManifest)
+    }
     for (var entryKey in _pluginBarEntryShellApis)
       _pluginBarEntryShellApis[entryKey].barConfig = shell.publicBarConfig()
   }

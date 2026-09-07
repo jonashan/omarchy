@@ -159,10 +159,12 @@ import QtQuick
 import Quickshell.Io
 
 Item {
+  id: root
   property string marker: "clone-service"
   property bool enabled: true
   property var activePlayer: null
   property var sourcePlayers: []
+  property var shell: null
 
   function runAction(action, showFeedback, targetKey) {}
   function playerKey(player) { return "" }
@@ -171,6 +173,9 @@ Item {
   IpcHandler {
     target: "acme-media-clone-service"
     function ping(): string { return marker }
+    function summonOsd(): string {
+      return root.shell && root.shell.summon("omarchy.osd", "{}") ? "true" : "false"
+    }
   }
 }
 QML
@@ -633,6 +638,10 @@ jq -e '.reachable == true and .marker == "clone-service"' \
   fail_with_log "a cloned widget resolves its source id to its own companion service"
 }
 pass "trusted bar gives a cloned widget its own companion service"
+
+[[ $(shell_ipc acme-media-clone-service summonOsd) == "true" ]] ||
+  fail_with_log "a cloned media service cannot summon its existing OSD target"
+pass "a cloned built-in service retains its auxiliary UI integration"
 
 [[ $(shell_ipc shell setPluginEnabled "$victim_service_id" true) == "ok" ]] ||
   fail_with_log "victim service fixture could not be enabled"

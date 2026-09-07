@@ -32,6 +32,7 @@ ShellRoot {
     authStoreOwner.updateManifest("omarchy.lock", { version: "kept" })
     var api = apiComponent.createObject(null, {
       pluginId: caller,
+      idleConfig: { screensaver: 60, lock: 120 },
       _serviceLookup: function(requestedId) {
         return requestedId === caller ? root.ownService : null
       },
@@ -74,6 +75,7 @@ ShellRoot {
       foreignOpen: api.isPluginOpen("omarchy.lock") === false,
       ownSettings: api.updateEntryInline(caller, {}) === true,
       foreignSettings: api.updateEntryInline("omarchy.lock", {}) === false,
+      detachedIdleConfig: api.idleConfig.screensaver === 60 && api.idleConfig.lock === 120,
       authStoreOwnerRetains: authStoreOwner.has("omarchy.lock") === true,
       authStoreOwnerRemembersTrust: authStoreOwner.isTrusted("omarchy.lock") === true,
       authStoreOwnerUpdatesManifest: root.ownService.manifest

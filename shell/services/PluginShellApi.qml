@@ -15,6 +15,7 @@ QtObject {
   property var appLibrary: null
   property var bar: null
   property var barConfig: ({})
+  property var idleConfig: ({})
 
   property var _serviceLookup: null
   property var _firstPartyServiceLookup: null

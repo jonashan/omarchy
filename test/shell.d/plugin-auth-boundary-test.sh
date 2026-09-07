@@ -21,6 +21,7 @@ trap cleanup EXIT
 shell_qml="$ROOT/shell/shell.qml"
 bar_qml="$ROOT/shell/plugins/bar/Bar.qml"
 plugin_shell_api="$ROOT/shell/services/PluginShellApi.qml"
+idle_service="$ROOT/shell/plugins/services/idle/Service.qml"
 
 # Normalize horizontal and vertical whitespace so the wiring assertions survive
 # harmless QML reflow. The runtime fixture below behaviorally covers
@@ -122,6 +123,20 @@ qml_matches "$shell_qml" 'shell\.barPluginMayControl\( *currentManifest\( *\), *
 qml_matches "$shell_qml" 'return hasCurrentBarCapabilities\( *\) *\? *shell\.mutatePluginBarConfig\( *mutator *\) *: *false' ||
   fail "bar configuration mutation does not validate the current manifest"
 pass "manifest changes revoke cached facade capabilities"
+
+qml_matches "$shell_qml" 'idleConfig: *shell\.publicIdleConfigFor\( *manifest *\)' ||
+  fail "cloned idle services do not receive their configured timeouts"
+qml_matches "$shell_qml" 'shellApi\.idleConfig *= *shell\.publicIdleConfigFor\( *shellManifest *\)' ||
+  fail "cloned idle service configuration does not refresh"
+qml_matches "$idle_service" 'shell *&& *shell\.idleConfig *\? *shell\.idleConfig *: *\(\{\}\)' ||
+  fail "the idle service does not consume its scoped configuration"
+qml_matches "$shell_qml" 'shell\.pluginCloneMaySummon\( *currentManifest\( *\), *requestedId *\)' ||
+  fail "built-in clones cannot summon their existing auxiliary UI"
+qml_matches "$shell_qml" '"omarchy\.media": *\["omarchy\.osd"\]' ||
+  fail "media clones cannot summon their existing OSD target"
+qml_matches "$shell_qml" '"omarchy\.network": *\["omarchy\.speedtest", *"omarchy\.wifiqr"\]' ||
+  fail "network clones cannot summon their existing auxiliary panels"
+pass "built-in service and widget clones retain narrow configuration and UI integration"
 
 qml_matches "$shell_qml" 'shell\.serviceFor\( *shell\.pluginRegistry\.resolveEnabledId\( *id *\) *\)' ||
   fail "narrow first-party service proxies do not resolve enabled clones"

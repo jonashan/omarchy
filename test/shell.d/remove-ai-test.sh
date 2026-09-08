@@ -55,6 +55,24 @@ pass "ChatGPT removal keeps the Codex CLI's runtime cache"
 [[ -d $HOME/.codex ]] || fail "ChatGPT removal keeps the Codex CLI's config"
 pass "ChatGPT removal keeps the Codex CLI's config"
 
+# The Claude Code CLI ships in its own package and keeps its state in
+# ~/.claude, ~/.claude.json, and ~/.cache/claude-cli-nodejs, so removing the
+# desktop app must not take it.
+fresh_home
+mkdir -p "$HOME/.config/Claude" "$HOME/.cache/Claude" "$HOME/.cache/claude-cli-nodejs" "$HOME/.claude"
+touch "$HOME/.claude.json"
+"$ROOT/bin/omarchy-remove-ai-claude" >/dev/null
+
+for gone in .config/Claude .cache/Claude; do
+  [[ ! -e $HOME/$gone ]] || fail "Claude removal deletes the desktop app's config and caches" "$gone"
+done
+pass "Claude removal deletes the desktop app's config and caches"
+
+for kept in .claude .claude.json .cache/claude-cli-nodejs; do
+  [[ -e $HOME/$kept ]] || fail "Claude removal keeps the Claude Code CLI's state" "$kept"
+done
+pass "Claude removal keeps the Claude Code CLI's state"
+
 # LM Studio's models follow a relocatable home, named only by the pointer file.
 fresh_home
 mkdir -p "$tmp_dir/relocated-models/models"

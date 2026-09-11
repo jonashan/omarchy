@@ -15,6 +15,14 @@ printf 'drop:%s\n' "$*" >>"$TEST_LOG"
 SCRIPT
 chmod +x "$tmp_dir/bin/omarchy-pkg-drop"
 
+# omarchy-remove-ai-claude quits the running app before deleting its state;
+# a real pkill here would take the developer's own Claude with it.
+cat >"$tmp_dir/bin/pkill" <<'SCRIPT'
+#!/bin/bash
+printf 'pkill:%s\n' "$*" >>"$TEST_LOG"
+SCRIPT
+chmod +x "$tmp_dir/bin/pkill"
+
 # omarchy-remove-ai-perplexity asks through gum whether the user's data goes
 # too. The stub answers "no" unless a test says otherwise and logs the call: a
 # real gum would hang the run, and one that answered "yes" on its own would be
@@ -72,6 +80,9 @@ for kept in .claude .claude.json .cache/claude-cli-nodejs; do
   [[ -e $HOME/$kept ]] || fail "Claude removal keeps the Claude Code CLI's state" "$kept"
 done
 pass "Claude removal keeps the Claude Code CLI's state"
+
+grep -qx 'pkill:-x claude-desktop' "$TEST_LOG" || fail "Claude removal quits the running app before deleting its state"
+pass "Claude removal quits the running app before deleting its state"
 
 # LM Studio's models follow a relocatable home, named only by the pointer file.
 fresh_home

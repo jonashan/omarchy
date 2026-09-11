@@ -6,6 +6,10 @@
 # -u so an unset HOME is an error rather than a set of rm -rf paths rooted at /.
 set -euo pipefail
 
+# The app rewrites ~/.config/Claude for as long as it runs, so a removal that
+# leaves it running deletes the directory and watches it come straight back.
+pkill -x claude-desktop || true
+
 omarchy-pkg-drop claude-desktop
 
 # Not ~/.claude, ~/.claude.json, or ~/.cache/claude-cli-nodejs: those belong

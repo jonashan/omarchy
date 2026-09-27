@@ -29,12 +29,14 @@ Rectangle {
   readonly property bool dragged: panel.dragIndex === index
 
   // Lightest at midday, darkest at night, so the list dims into the small hours.
+  readonly property real dayFill: 0.10
   readonly property real phaseFill: {
     var p = ready ? rowData.phase : "day"
-    if (p === "day") return 0.10
+    if (p === "day") return dayFill
     if (p === "night") return 0.035
     return 0.07
   }
+  readonly property real hoverLift: 0.05
 
   readonly property int pad: Style.space(15)
   readonly property int stripGap: Style.space(9)
@@ -45,9 +47,13 @@ Rectangle {
   implicitHeight: (pad - panel.capGap) + rowLabels.implicitHeight + stripGap + strip.trackHeight + pad
   radius: Style.cornerRadius
   // Opaque: knocked-aside rows pass over one another and over the globe.
-  // The picked city lights up like a hovered one, so the arrow keys show where they are.
-  readonly property bool lit: rowHover.hovered || (panel.focusIndex === index && !panel.addSelected)
-  color: Model.mix(Color.popups.background, foreground, lit ? phaseFill + 0.05 : phaseFill)
+  // Hover lifts a row from its own time of day. The picked city takes the
+  // brightest lifted fill whatever its time of day, so a night row picked by the
+  // arrow keys never reads darker than the daytime rows around it.
+  readonly property bool picked: panel.focusIndex === index && !panel.addSelected
+  readonly property bool lit: rowHover.hovered || picked
+  color: Model.mix(Color.popups.background, foreground,
+    picked ? dayFill + hoverLift : rowHover.hovered ? phaseFill + hoverLift : phaseFill)
 
   // Transforms leave the Column's layout alone: the knock that clears the
   // globe's way, then the drag offset.

@@ -1516,9 +1516,9 @@ ShellRoot {
 
   // ------------------------------------------------------ global shortcuts
   //
-  // Bindings that open a menu route or panel dispatch these through Hyprland,
-  // so a keypress reaches the shell without spawning an omarchy-shell IPC
-  // client. The list is shared with default/hypr/helpers.lua, which binds a
+  // Bindings that open a menu route or panel, or step the volume, dispatch
+  // these through Hyprland, so a keypress reaches the shell without spawning
+  // an IPC client or script. The list is shared with default/hypr/helpers.lua, which binds a
   // route or panel missing from it through the command instead.
 
   function parseShortcuts(raw) {
@@ -1526,17 +1526,33 @@ ShellRoot {
     var lines = String(raw || "").split("\n")
     for (var i = 0; i < lines.length; i++) {
       var match = /^([A-Za-z]+)\s+(\S+)\s*$/.exec(lines[i])
-      if (match && (match[1] === "menu" || match[1] === "panel"))
+      if (match && ["menu", "panel", "audio", "ipc"].indexOf(match[1]) !== -1)
         entries.push({ kind: match[1], target: match[2], name: match[1] + "." + match[2] })
     }
     return entries
   }
 
+  // The IPC targets an ipc shortcut may name, and the service that owns each.
+  readonly property var ipcShortcutServices: ({ media: "omarchy.media", notifications: "omarchy.notifications" })
+
   function runShortcut(entry) {
-    if (entry.kind === "menu")
+    if (entry.kind === "menu") {
       shell.toggle("omarchy.menu", JSON.stringify({ menu: entry.target }))
-    else
+    } else if (entry.kind === "ipc") {
+      // "media.next" runs the media service's own IPC handler for next.
+      var dot = entry.target.indexOf(".")
+      var target = entry.target.slice(0, dot)
+      var method = entry.target.slice(dot + 1)
+      var service = shell.serviceFor(shell.ipcShortcutServices[target] || "")
+      if (!service || !service.runShortcut(method))
+        Util.execArgv(["omarchy-shell", target, method])
+    } else if (entry.kind === "audio") {
+      var media = shell.serviceFor("omarchy.media")
+      if (!media || !media.handleVolumeKey(entry.target))
+        Util.execArgv(["omarchy-audio-output-volume", entry.target])
+    } else {
       shell.toggle(entry.target, "{}")
+    }
   }
 
   FileView {
@@ -1554,7 +1570,7 @@ ShellRoot {
 
       appid: "omarchy"
       name: modelData.name
-      description: modelData.kind === "menu" ? "Toggle the " + modelData.target + " menu" : "Toggle the " + modelData.target + " panel"
+      description: modelData.kind === "audio" ? "Volume " + modelData.target : (modelData.kind === "ipc" ? "Run " + modelData.target : "Toggle the " + modelData.target + " " + modelData.kind)
       onPressed: shell.runShortcut(modelData)
     }
   }

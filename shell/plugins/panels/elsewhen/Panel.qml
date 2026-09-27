@@ -104,6 +104,7 @@ Panel {
   property int zoomEasing: Easing.OutQuart
 
   function setGlobeMode(on, slow) {
+    if (on) addSelected = false
     zoomDuration = (on ? 800 : 500) * (slow === true ? slowMotionFactor : 1)
     zoomEasing = on ? Easing.OutQuart : Easing.InOutCubic
     globeMode = on
@@ -200,6 +201,13 @@ Panel {
 
   function endScrub() { scrubHold.restart() }
 
+  // Held until Escape or close: a key press has no release to time from. Unlike a
+  // drag, which stays within the strip's day, the keys can run on into other days.
+  function shiftHour(step) {
+    scrubHold.stop()
+    scrubMinutes = Math.round(scrubMinutes) + step * 60
+  }
+
   // ---- the moon
   // Shift-click a moon marker to walk the phase through a lunation.
   property bool moonShowing: false
@@ -265,9 +273,45 @@ Panel {
   readonly property real focusLon: focusKnown ? focusPlace.lon : 0
 
   function focusOn(index) {
+    addSelected = false
     var from = hero.spin
     focusKey = index >= 0 && index < zones.length ? Model.factsKey(zones[index]) : ""
     if (focusKnown) hero.turn(from, focusLon)
+  }
+
+  // Past the last city, the list's cursor rests on "Add a city"; the globe stays put.
+  property bool addSelected: false
+
+  // Up and down walk home, each city and then "Add a city", wrapping round like the
+  // search list. The globe has no add row, so there the walk skips it.
+  function moveFocus(step) {
+    var at = addSelected ? zones.length : focusIndex
+    var next = Model.moveSelection(at + 1, step, zones.length + (globeMode ? 1 : 2)) - 1
+    if (next === zones.length) {
+      addSelected = true
+      scrollToItem(citySearch)
+      return
+    }
+    focusOn(next)
+    if (globeMode) showFocusOnGlobe()
+    else scrollToItem(next >= 0 ? cityRows.itemAt(next) : null)
+  }
+
+  // The picked city goes, as with its × button, and the cursor lands on the city
+  // that takes its place. The last city stays, so there is always one clock.
+  function deleteFocused() {
+    if (globeMode || addSelected || focusIndex < 0 || zones.length < 2) return
+    var at = focusIndex
+    removeCityAt(at)
+    focusOn(Math.min(at, zones.length - 1))
+  }
+
+  function scrollToItem(item) {
+    if (!item) { scroller.scrollToTop(); return }
+    var top = item.mapToItem(content, 0, 0).y
+    if (top < scroller.contentY) scroller.scrollTo(top)
+    else if (top + item.height > scroller.contentY + scroller.height)
+      scroller.scrollTo(Math.min(scroller.maxScroll, top + item.height - scroller.height))
   }
 
   // Surrogate pairs rather than literal glyphs, which re-encoding can break.
@@ -460,6 +504,7 @@ Panel {
   onOpenedChanged: {
     if (opened) {
       focusKey = ""
+      addSelected = false
       tick(); refresh(); refreshFacts(); loadCatalog()
       startOpeningSpin()
     } else {
@@ -669,17 +714,27 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       blocked: root.adding
-      // Escape unwinds one layer: search (its own field), globe, then panel.
+      // Escape unwinds one layer: search (its own field), a shifted time, globe, then panel.
       onCloseRequested: {
-        if (root.globeMode) root.setGlobeMode(false, false)
+        if (root.scrubMinutes !== 0) { scrubHold.stop(); root.scrubMinutes = 0 }
+        else if (root.globeMode) root.setGlobeMode(false, false)
         else root.close()
       }
-      // Space toggles the globe. Return also arrives as an activate, which it skips.
+      onDeleteRequested: root.deleteFocused()
+      // Up and down pick a city; left and right move the clocks an hour.
+      onMoveRequested: function(dx, dy) {
+        if (dy !== 0) root.moveFocus(dy)
+        else root.shiftHour(dx)
+      }
+      // Return or Space on "Add a city" opens the search. Otherwise Space toggles
+      // the globe, and Return, which also arrives as an activate, does nothing.
       property bool returnHandled: false
       onReturnRequested: returnHandled = true
       onActivateRequested: {
-        if (returnHandled) { returnHandled = false; return }
-        if (root.globeEnabled) root.setGlobeMode(!root.globeMode, false)
+        var fromReturn = returnHandled
+        returnHandled = false
+        if (root.addSelected) root.startAdding()
+        else if (!fromReturn && root.globeEnabled) root.setGlobeMode(!root.globeMode, false)
       }
       onTabRequested: function(direction) { root.switchPanel(direction) }
       // "+" searches in either view; "j" jumps on the globe, "a" adds on the list.
@@ -792,6 +847,7 @@ Panel {
                   // The zone list, not clockRows: that ticks, and would
                   // rebuild every delegate mid-drag.
                   Repeater {
+                    id: cityRows
                     model: root.zones
 
                     CityRow { panel: root }
@@ -805,6 +861,7 @@ Panel {
                   options: root.zoneOptions
                   loading: root.zoneCatalogText === ""
                   offsetLabel: function(zoneId) { return root.utcLabelFor(zoneId) }
+                  hasCursor: root.addSelected
                   foreground: root.foreground
                   dim: root.dim
                   fainter: root.fainter

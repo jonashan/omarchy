@@ -45,7 +45,9 @@ Rectangle {
   implicitHeight: (pad - panel.capGap) + rowLabels.implicitHeight + stripGap + strip.trackHeight + pad
   radius: Style.cornerRadius
   // Opaque: knocked-aside rows pass over one another and over the globe.
-  color: Model.mix(Color.popups.background, foreground, rowHover.hovered ? phaseFill + 0.05 : phaseFill)
+  // The picked city lights up like a hovered one, so the arrow keys show where they are.
+  readonly property bool lit: rowHover.hovered || (panel.focusIndex === index && !panel.addSelected)
+  color: Model.mix(Color.popups.background, foreground, lit ? phaseFill + 0.05 : phaseFill)
 
   // Transforms leave the Column's layout alone: the knock that clears the
   // globe's way, then the drag offset.
@@ -288,7 +290,8 @@ Rectangle {
     fontFamily: row.fontFamily
     fontSize: Style.font.bodySmall
     enabled: row.removable
-    opacity: row.removable && rowHover.hovered ? 1 : 0
+    // Shown on the keyboard's pick too, so Delete's target is plain.
+    opacity: row.removable && row.lit ? 1 : 0
     visible: opacity > 0
     Behavior on opacity { NumberAnimation { duration: 120 } }
     onClicked: row.panel.removeCityAt(row.index)

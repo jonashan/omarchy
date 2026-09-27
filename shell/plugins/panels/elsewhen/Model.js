@@ -673,9 +673,13 @@ function formatScrubDelta(minutes) {
   if (m === 0) return ""
   var sign = m > 0 ? "+" : "-"
   var a = Math.abs(m)
-  if (a < 60) return sign + a + "m"
-  var h = Math.floor(a / 60), rem = a % 60
-  return sign + h + "h" + (rem ? " " + rem + "m" : "")
+  // The arrow keys can run past a day, where hours alone stop reading well.
+  var d = Math.floor(a / DAY_MINUTES), h = Math.floor(a % DAY_MINUTES / 60), rem = a % 60
+  var parts = []
+  if (d) parts.push(d + "d")
+  if (h) parts.push(h + "h")
+  if (rem) parts.push(rem + "m")
+  return sign + parts.join(" ")
 }
 
 // ---- the strip's sunrise arrows

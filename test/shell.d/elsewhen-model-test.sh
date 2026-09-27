@@ -60,6 +60,7 @@ assertEqual(Math.round(M.scrubDeltaMinutes(-1, 720)), 720, 'elsewhen resolves a 
 assertEqual(Math.round(M.scrubDeltaMinutes(1, 720)), 720, 'elsewhen resolves a half-day scrub forward from the other edge')
 assertEqual(Math.round(M.scrubDeltaMinutes(600 / 1440, 600)), 0, 'elsewhen scrub at the current time is zero')
 assertDeepEqual([M.formatScrubDelta(0), M.formatScrubDelta(45), M.formatScrubDelta(-90), M.formatScrubDelta(180)], ['', '+45m', '-1h 30m', '+3h'], 'elsewhen formats scrub deltas')
+assertDeepEqual([M.formatScrubDelta(1440), M.formatScrubDelta(-2220), M.formatScrubDelta(1500)], ['+1d', '-1d 13h', '+1d 1h'], 'elsewhen formats scrub deltas past a day in days')
 
 assertDeepEqual([M.formatMinuteOfDay(0, false), M.formatMinuteOfDay(13 * 60 + 5, false), M.formatMinuteOfDay(13 * 60, true)], ['12:00 AM', '1:05 PM', '13:00'], 'elsewhen formats minutes of the day')
 assertEqual(M.formatMinuteOfDay(419.81, false), '7:00 AM', 'elsewhen rolls the hour when rounding seconds')
@@ -147,6 +148,7 @@ assertEqual(M.moveSelection(2, 1, 5), 3, 'elsewhen moves the selection down')
 assertEqual(M.moveSelection(4, 1, 5), 0, 'elsewhen wraps the selection past the end')
 assertEqual(M.moveSelection(0, -1, 5), 4, 'elsewhen wraps the selection past the start')
 assertEqual(M.moveSelection(3, 1, 0), 0, 'elsewhen resets the selection in an empty list')
+
 
 const home = ['Copenhagen', 'Europe/Copenhagen', 55.68, 12.57, 0]
 const merged = M.mergeCities(

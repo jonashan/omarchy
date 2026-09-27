@@ -56,6 +56,7 @@ Item {
   signal offsetModeToggleRequested()
   // Only real selections: -1 means "no city" here but "home" in the list.
   signal citySelected(string label, string zone)
+  signal cityTapped(string label, string zone)
 
   // ---- data -------------------------------------------------------------
   property var land: []            // coastline rings, flat [lon,lat,...]
@@ -96,7 +97,10 @@ Item {
   function pickAt(cx, cy) {
     var hit = hitAt(cx, cy)
     selectAt(hit)
-    if (hit >= 0) flyTo(allCities[hit][2], allCities[hit][3])
+    if (hit >= 0) {
+      flyTo(allCities[hit][2], allCities[hit][3])
+      cityTapped(allCities[hit][0], allCities[hit][1])
+    }
     return hit
   }
 

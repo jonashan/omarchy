@@ -118,6 +118,13 @@ Panel {
     else g.showHome()
   }
 
+  function claimHome(label, zone) {
+    var stored = Model.homeCityAfterTap(label, zone, setting("homeCity", ""), localZone)
+    if (stored === null) return
+    persistSettings({ homeCity: stored })
+    refreshFacts()
+  }
+
   function focusFromGlobe(label, zone) {
     var i = Model.indexOfZone(zones, label, zone)
     if (i >= 0) focusOn(i)
@@ -876,6 +883,7 @@ Panel {
                 item.exitRequested.connect(function() { root.setGlobeMode(false, false) })
                 item.jumpDismissed.connect(function() { Qt.callLater(function() { keyCatcher.forceActiveFocus() }) })
                 item.citySelected.connect(function(label, zone) { root.focusFromGlobe(label, zone) })
+                item.cityTapped.connect(function(label, zone) { root.claimHome(label, zone) })
                 // A cold start can finish loading after the mode switched on.
                 if (root.globeMode) root.showFocusOnGlobe()
               }

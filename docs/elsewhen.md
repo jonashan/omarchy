@@ -302,7 +302,7 @@ The opening spin **lands on home** - the animation runs from `homeLon - 1080` to
 
 The header reads "It's 10:28 AM here in Los Angeles." rather than a bare "here", which names your own city without spending a row on it. The zone comes from the same `date` probe the rows use - one extra `LOCAL|<zone>` line, from `timedatectl` - so it costs no additional process and follows a time-zone change on the next refresh.
 
-The city name is the zone's last segment, and the tz database names zones after a *representative* city: someone in Boca Raton would read "here in New York". Set `homeCity` to override it.
+The city name is the zone's last segment, and the tz database names zones after a *representative* city: someone in Boca Raton would read "here in New York". Tap your city on the globe to fix that: a city on this machine's zone becomes `homeCity`, and the header and home pin follow it. Tapping the zone's own city clears the choice, and a city on another zone leaves it alone, since the time beside the name is still this machine's.
 
 ## Two offsets, one line
 
@@ -369,7 +369,7 @@ Inline on the widget's `shell.json` entry:
 | `offsetMode` | `home` for the offset from you (default), `utc` for the absolute one |
 | `units`  | `F` or `C`; blank (the default) follows the system's measurement units. Click any temperature to flip it |
 | `globeEnabled` | `false` to remove the globe entry point (default on) |
-| `homeCity` | your city for the header (blank = from the system zone) |
+| `homeCity` | your city for the header (blank = from the system zone); set by tapping a city on this zone on the globe |
 | `smoothMotion` | drop labels and detail while the globe moves (default true) |
 
 ## IPC

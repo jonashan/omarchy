@@ -272,6 +272,18 @@ function labelForZoneId(id) {
   return String(id || "").split("/").pop().replace(/_/g, " ")
 }
 
+// Tapping a city on this machine's clock makes it "here", and the zone's own
+// city clears the choice. The new homeCity setting, or null to leave it.
+function homeCityAfterTap(label, zoneId, homeOverride, localZone) {
+  var name = String(label || "").trim()
+  var local = String(localZone || "")
+  if (name === "" || local === "" || String(zoneId || "") !== local) return null
+  var override = String(homeOverride || "").trim()
+  var zoneCity = labelForZoneId(local)
+  if (name === (override === "" ? zoneCity : override)) return null
+  return name === zoneCity ? "" : name
+}
+
 function serializeZones(zones) {
   var parts = []
   for (var i = 0; i < zones.length; i++) {
@@ -880,6 +892,7 @@ if (typeof module !== "undefined") {
     indexOfZone: indexOfZone,
     indexOfZoneKey: indexOfZoneKey,
     labelForZoneId: labelForZoneId,
+    homeCityAfterTap: homeCityAfterTap,
     serializeZones: serializeZones,
     addZone: addZone,
     removeZoneAt: removeZoneAt,

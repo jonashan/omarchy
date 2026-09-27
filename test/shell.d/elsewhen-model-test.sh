@@ -306,6 +306,16 @@ assertDeepEqual(seedProblems, [], 'elsewhen seeds four well-spread cities around
 assertEqual(M.seedZones({ label: 'Nowhere', id: 'Not/AZone' }, offsets, 4).length, 1, 'elsewhen seeds only home when its offset is unknown')
 assertEqual(M.pickSeedZones({ label: 'X', id: 'UTC' }, {}, 4).length, 0, 'elsewhen seeds nothing without offsets')
 
+// ---- claiming home from the globe
+const CHI = 'America/Chicago'
+assertEqual(M.homeCityAfterTap('Nashville', CHI, '', CHI), 'Nashville', 'elsewhen makes a tapped city on this zone home')
+assertEqual(M.homeCityAfterTap('Nashville', CHI, 'Nashville', CHI), null, 'elsewhen leaves home alone on a second tap')
+assertEqual(M.homeCityAfterTap('Chicago', CHI, 'Nashville', CHI), '', 'elsewhen clears home when the zone\'s own city is tapped')
+assertEqual(M.homeCityAfterTap('Chicago', CHI, '', CHI), null, 'elsewhen stores nothing for the zone\'s own city when none is set')
+assertEqual(M.homeCityAfterTap('London', 'Europe/London', '', CHI), null, 'elsewhen never makes a city on another zone home')
+assertEqual(M.homeCityAfterTap('Nashville', CHI, '', ''), null, 'elsewhen stores nothing before the machine zone is known')
+assertEqual(M.homeCityAfterTap('  Nashville  ', CHI, '', CHI), 'Nashville', 'elsewhen trims a tapped name')
+
 // ---- coordinates and weather
 const tab = '#comment\nUS\t+404251-0740023\tAmerica/New_York\nIN\t+2232+08822\tAsia/Kolkata\n'
 assertDeepEqual(M.zoneTabCoords(tab, 'America/New_York'), { lat: 40.7142, lon: -74.0064 }, 'elsewhen reads seconds-precision zone1970 coordinates')
